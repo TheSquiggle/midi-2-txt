@@ -15,6 +15,21 @@
         #status {
             margin-top: 20px;
         }
+        #progress {
+            width: 100%;
+            height: 20px;
+            background-color: #f3f3f3;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+        #progress-bar {
+            height: 100%;
+            background-color: #4caf50;
+            width: 0%;
+        }
+        #noteCount {
+            margin-top: 10px;
+        }
         #downloadButton {
             margin-top: 20px;
             display: none;
@@ -25,7 +40,15 @@
     <h1>Black MIDI Monster Converter</h1>
     <p>Select a MIDI file to process (up to billions of notes supported):</p>
     <input type="file" id="midiFileInput" />
+    
     <div id="status"></div>
+    <div id="progress">
+        <div id="progress-bar"></div>
+    </div>
+    <div id="noteCount">
+        Processed: <span id="processedNotes">0</span> | Remaining: <span id="remainingNotes">0</span>
+    </div>
+    
     <button id="downloadButton" onclick="downloadFile()">Download Processed File</button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -34,7 +57,9 @@
         const workerCount = navigator.hardwareConcurrency || 4; // Use available CPU cores or 4 workers by default
         let workers = [];
         let processedChunks = [];
-
+        let totalNotes = 0;
+        let processedNotesCount = 0;
+        
         // Helper function to create workers
         function createWorker(chunkId) {
             const worker = new Worker('worker.js'); // Assuming worker.js handles MIDI chunk processing
@@ -66,24 +91,36 @@
         }
 
         // Function to append processed notes to the output
-        function appendToFile(processedNotes) {
+        function appendToFile(processedNotes, chunkSize) {
             // Collect processed data in an array
             processedChunks.push(processedNotes);
+            processedNotesCount += chunkSize;
 
+            // Update progress bar and note count
+            updateProgressBar();
+            
             // Enable download button once all chunks are processed
             if (processedChunks.length === workers.length) {
                 document.getElementById("status").innerText = "Processing complete! Click to download.";
                 document.getElementById("downloadButton").style.display = 'block'; // Show the download button
-            } else {
-                document.getElementById("status").innerText = "Processing chunk... Please wait.";
             }
+        }
+
+        // Function to update the progress bar
+        function updateProgressBar() {
+            const progressPercentage = (processedNotesCount / totalNotes) * 100;
+            document.getElementById("progress-bar").style.width = `${progressPercentage}%`;
+
+            // Update the notes processed and remaining count
+            document.getElementById("processedNotes").innerText = processedNotesCount;
+            document.getElementById("remainingNotes").innerText = totalNotes - processedNotesCount;
         }
 
         // Handle worker messages (processed notes)
         workers.forEach(worker => {
             worker.onmessage = function(event) {
-                const { chunkId, processedNotes } = event.data;
-                appendToFile(processedNotes); // Append processed notes to the array
+                const { chunkId, processedNotes, chunkSize } = event.data;
+                appendToFile(processedNotes, chunkSize); // Append processed notes to the array
             };
         });
 
@@ -91,6 +128,9 @@
         document.getElementById('midiFileInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
             if (file) {
+                // Determine total notes (this is just a simulation)
+                totalNotes = file.size; // Use size as a rough estimate for the number of notes
+                
                 document.getElementById("status").innerText = "Processing your MIDI file...";
                 processMidiFile(file); // Start the MIDI file processing
             } else {
