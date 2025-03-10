@@ -4,44 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MIDI to Text Converter (No Instruments, No Piano Roll)</title>
-    <style>
-        #noteDisplay {
-            white-space: pre-wrap;
-            border: 1px solid #ccc;
-            padding: 10px;
-            height: 200px;
-            overflow-y: scroll;
-        }
-    </style>
 </head>
 <body>
 
 <h2>Upload a MIDI file</h2>
 <input type="file" id="fileInput" accept=".mid">
-<button id="convertButton">Convert to Text</button>
+<button onclick="convertMidi()">Convert to Text</button>
 <br><br>
 <progress id="progressBar" value="0" max="100" style="width:100%; display:none;"></progress>
-<br><br>
-<div>
-    <h3>Track Selection</h3>
-    <div id="trackSelection"></div>
-</div>
-<button onclick="playMidi()">Play MIDI</button>
 <br><br>
 <div id="noteDisplay"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/tone@14"></script>
 <script>
 let midi;
-let synth;
-let worker;
 
 function convertMidi() {
     const fileInput = document.getElementById('fileInput');
     const progressBar = document.getElementById('progressBar');
-    const noteDisplay = document.getElementById('noteDisplay');
-    const trackSelection = document.getElementById('trackSelection');
 
     if (fileInput.files.length === 0) {
         alert('Please upload a MIDI file.');
@@ -63,119 +43,44 @@ function convertMidi() {
             return;
         }
 
-        noteDisplay.innerHTML = '';
-        trackSelection.innerHTML = '';
+        let allNotes = [];
 
-        midi.tracks.forEach((track, index) => {
-            const trackOption = document.createElement('input');
-            trackOption.type = 'checkbox';
-            trackOption.id = `track${index}`;
-            trackOption.checked = true;
-
-            const label = document.createElement('label');
-            label.htmlFor = `track${index}`;
-            label.textContent = ` Track ${index + 1} (${track.notes.length} notes)`;
-
-            trackSelection.appendChild(trackOption);
-            trackSelection.appendChild(label);
-            trackSelection.appendChild(document.createElement('br'));
+        // Collect all notes from all tracks
+        midi.tracks.forEach(track => {
+            track.notes.forEach(note => {
+                allNotes.push({
+                    pitch: note.midi,
+                    length: note.duration.toFixed(3),
+                    time: note.time.toFixed(3)
+                });
+            });
         });
 
-        startWorker();
+        // Sort all notes by time
+        allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+
+        // Generate the text content
+        let textContent = '';
+        allNotes.forEach(note => {
+            textContent += `${note.pitch}:${note.length}:${note.time}\n`;
+        });
+
+        // Create and trigger the download
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'midi_notes.txt';
+        a.click();
+
+        URL.revokeObjectURL(url);
+        progressBar.value = 100;
+        progressBar.style.display = 'none';
     };
 
     reader.readAsArrayBuffer(file);
 }
-
-function startWorker() {
-    if (worker) worker.terminate();
-    worker = new Worker(URL.createObjectURL(new Blob([`
-        self.onmessage = function(event) {
-            const midiData = event.data.midi;
-            const selectedTracks = event.data.selectedTracks;
-
-            let allNotes = [];
-
-            // Collect all notes from all tracks
-            midiData.tracks.forEach((track, index) => {
-                if (!selectedTracks.includes(index)) return;
-
-                track.notes.forEach(note => {
-                    allNotes.push({
-                        pitch: note.midi,
-                        length: note.duration.toFixed(3),
-                        time: note.time.toFixed(3)
-                    });
-                });
-            });
-
-            // Sort all notes by their start time
-            allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
-
-            // Build the text output without instrument data
-            let textContent = '';
-            allNotes.forEach(note => {
-                textContent += \`\${note.pitch}:\${note.length}:\${note.time}\n\`;
-            });
-
-            self.postMessage({ textContent });
-        };
-    `], { type: 'application/javascript' })));
-
-    const selectedTracks = Array.from(document.querySelectorAll('#trackSelection input:checked'))
-        .map(input => parseInt(input.id.replace('track', '')));
-
-    worker.postMessage({ midi: midi.toJSON(), selectedTracks });
-
-    worker.onmessage = function(event) {
-        const { textContent } = event.data;
-        downloadTextFile(textContent);
-        progressBar.value = 100;
-        progressBar.style.display = 'none';
-    };
-}
-
-function downloadTextFile(content) {
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'midi_notes_sorted.txt';
-    a.click();
-
-    URL.revokeObjectURL(url);
-}
-
-function playMidi() {
-    if (!midi) {
-        alert('Please upload a MIDI file first.');
-        return;
-    }
-
-    if (synth) {
-        synth.dispose();
-    }
-
-    synth = new Tone.PolySynth(Tone.Synth).toDestination();
-
-    midi.tracks.forEach((track, index) => {
-        if (!document.getElementById(`track${index}`).checked) return;
-
-        track.notes.forEach(note => {
-            synth.triggerAttackRelease(
-                Tone.Frequency(note.midi, 'midi').toFrequency(),
-                note.duration,
-                Tone.now() + note.time
-            );
-        });
-    });
-}
-
-// Ensure the script is fully loaded before attaching events
-window.onload = function() {
-    document.getElementById('convertButton').addEventListener('click', convertMidi);
-};
 </script>
 
 </body>
