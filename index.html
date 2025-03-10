@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MIDI to Text Converter (No Instruments, No Piano Roll)</title>
+    <title>Ultimate MIDI to Text Converter (Black MIDI Optimized)</title>
 </head>
 <body>
 
@@ -18,6 +18,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2"></script>
 <script>
 let midi;
+let worker;
 
 function convertMidi() {
     const fileInput = document.getElementById('fileInput');
@@ -43,40 +44,49 @@ function convertMidi() {
             return;
         }
 
-        let allNotes = [];
+        if (worker) worker.terminate();
+        const workerCode = `
+        self.onmessage = function(event) {
+            const midiData = event.data;
+            let allNotes = [];
 
-        // Collect all notes from all tracks
-        midi.tracks.forEach(track => {
-            track.notes.forEach(note => {
-                allNotes.push({
-                    pitch: note.midi,
-                    length: note.duration.toFixed(3),
-                    time: note.time.toFixed(3)
+            midiData.tracks.forEach(track => {
+                track.notes.forEach(note => {
+                    allNotes.push({
+                        pitch: note.midi,
+                        length: note.duration.toFixed(3),
+                        time: note.time.toFixed(3)
+                    });
                 });
             });
-        });
 
-        // Sort all notes by time
-        allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+            allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
 
-        // Generate the text content
-        let textContent = '';
-        allNotes.forEach(note => {
-            textContent += `${note.pitch}:${note.length}:${note.time}\n`;
-        });
+            let textContent = '';
+            allNotes.forEach(note => {
+                textContent += note.pitch + ':' + note.length + ':' + note.time + '\n';
+            });
 
-        // Create and trigger the download
-        const blob = new Blob([textContent], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
+            self.postMessage(textContent);
+        };`;
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'midi_notes.txt';
-        a.click();
+        worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
-        URL.revokeObjectURL(url);
-        progressBar.value = 100;
-        progressBar.style.display = 'none';
+        worker.postMessage(midi.toJSON());
+
+        worker.onmessage = function(event) {
+            const blob = new Blob([event.data], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'midi_notes.txt';
+            a.click();
+
+            URL.revokeObjectURL(url);
+            progressBar.value = 100;
+            progressBar.style.display = 'none';
+        };
     };
 
     reader.readAsArrayBuffer(file);
