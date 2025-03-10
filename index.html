@@ -3,152 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Black MIDI Monster Converter</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        input[type="file"] {
-            margin-bottom: 20px;
-        }
-        #status {
-            margin-top: 20px;
-        }
-        #progress {
-            width: 100%;
-            height: 20px;
-            background-color: #f3f3f3;
-            border: 1px solid #ddd;
-            margin-top: 20px;
-        }
-        #progress-bar {
-            height: 100%;
-            background-color: #4caf50;
-            width: 0%;
-        }
-        #noteCount {
-            margin-top: 10px;
-        }
-        #downloadButton {
-            margin-top: 20px;
-            display: none;
-        }
-    </style>
+    <title>Ultimate MIDI to Text Converter (Black MIDI Optimized)</title>
 </head>
 <body>
-    <h1>Black MIDI Monster Converter</h1>
-    <p>Select a MIDI file to process (up to billions of notes supported):</p>
-    <input type="file" id="midiFileInput" />
-    
-    <div id="status"></div>
-    <div id="progress">
-        <div id="progress-bar"></div>
-    </div>
-    <div id="noteCount">
-        Processed: <span id="processedNotes">0</span> | Remaining: <span id="remainingNotes">0</span>
-    </div>
-    
-    <button id="downloadButton" onclick="downloadFile()">Download Processed File</button>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    
-    <script>
-        const workerCount = navigator.hardwareConcurrency || 4; // Use available CPU cores or 4 workers by default
-        let workers = [];
-        let processedChunks = [];
-        let totalChunks = 0; // Total number of chunks to process
-        let processedChunksCount = 0; // Number of chunks processed
-        
-        // Helper function to create workers
-        function createWorker(chunkId) {
-            const worker = new Worker('worker.js'); // Assuming worker.js handles MIDI chunk processing
-            worker.postMessage({chunkId, midiData: null});
-            return worker;
+<h2>Upload a MIDI file</h2>
+<input type="file" id="fileInput" accept=".mid">
+<button onclick="convertMidi()">Convert to Text</button>
+<br><br>
+<progress id="progressBar" value="0" max="100" style="width:100%; display:none;"></progress>
+<br><br>
+<div id="noteDisplay"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2"></script>
+<script>
+let midi;
+let worker;
+
+function convertMidi() {
+    const fileInput = document.getElementById('fileInput');
+    const progressBar = document.getElementById('progressBar');
+
+    if (fileInput.files.length === 0) {
+        alert('Please upload a MIDI file.');
+        return;
+    }
+
+    progressBar.style.display = 'block';
+    progressBar.value = 0;
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(event) {
+        try {
+            midi = new Midi(event.target.result);
+        } catch (error) {
+            alert('Failed to read MIDI file. Please check the file format.');
+            progressBar.style.display = 'none';
+            return;
         }
 
-        // Initialize workers
-        for (let i = 0; i < workerCount; i++) {
-            workers.push(createWorker(i));
-        }
+        if (worker) worker.terminate();
+        const workerCode = `
+        self.onmessage = function(event) {
+            const midiData = event.data;
+            let allNotes = [];
 
-        // Function to process MIDI file in chunks
-        function processMidiFile(file) {
-            const chunkSize = 100000; // Size of chunks to send to workers
-            const fileReader = new FileReader();
-            let chunkId = 0;
+            midiData.tracks.forEach(track => {
+                track.notes.forEach(note => {
+                    allNotes.push({
+                        pitch: note.midi,
+                        length: note.duration.toFixed(3),
+                        time: note.time.toFixed(3)
+                    });
+                });
+            });
 
-            // Calculate total chunks
-            totalChunks = Math.ceil(file.size / chunkSize);
+            allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
 
-            // Read the file in chunks
-            fileReader.onload = function(event) {
-                const chunkData = event.target.result;
-                workers[chunkId % workerCount].postMessage({ chunkId, chunkData });
-                chunkId++;
-            };
+            let textContent = '';
+            allNotes.forEach(note => {
+                textContent += note.pitch + ':' + note.length + ':' + note.time + '\n';
+            });
 
-            let start = 0;
-            // Stream the file in chunks
-            while (start < file.size) {
-                fileReader.readAsArrayBuffer(file.slice(start, start + chunkSize));
-                start += chunkSize;
-            }
-        }
+            self.postMessage(textContent);
+        };`;
 
-        // Function to append processed notes to the output
-        function appendToFile(processedNotes) {
-            // Collect processed data in an array
-            processedChunks.push(processedNotes);
-            processedChunksCount++;
+        worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
-            // Update progress bar and note count
-            updateProgressBar();
+        worker.postMessage(midi.toJSON());
 
-            // Enable download button once all chunks are processed
-            if (processedChunksCount === totalChunks) {
-                document.getElementById("status").innerText = "Processing complete! Click to download.";
-                document.getElementById("downloadButton").style.display = 'block'; // Show the download button
-            }
-        }
+        worker.onmessage = function(event) {
+            const blob = new Blob([event.data], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
 
-        // Function to update the progress bar
-        function updateProgressBar() {
-            const progressPercentage = (processedChunksCount / totalChunks) * 100;
-            document.getElementById("progress-bar").style.width = `${progressPercentage}%`;
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'midi_notes.txt';
+            a.click();
 
-            // Update the notes processed and remaining count
-            document.getElementById("processedNotes").innerText = processedChunksCount;
-            document.getElementById("remainingNotes").innerText = totalChunks - processedChunksCount;
-        }
+            URL.revokeObjectURL(url);
+            progressBar.value = 100;
+            progressBar.style.display = 'none';
+        };
+    };
 
-        // Handle worker messages (processed notes)
-        workers.forEach(worker => {
-            worker.onmessage = function(event) {
-                const { chunkId, processedNotes } = event.data;
-                appendToFile(processedNotes); // Append processed notes to the array
-            };
-        });
+    reader.readAsArrayBuffer(file);
+}
+</script>
 
-        // When the user selects a file
-        document.getElementById('midiFileInput').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                document.getElementById("status").innerText = "Processing your MIDI file...";
-                processMidiFile(file); // Start the MIDI file processing
-            } else {
-                document.getElementById("status").innerText = "Please select a MIDI file!";
-            }
-        });
-
-        // Function to trigger download of the processed file
-        function downloadFile() {
-            // Combine all processed chunks into one single binary file
-            const combinedData = new Blob(processedChunks, { type: 'application/octet-stream' });
-
-            // Use FileSaver.js to trigger the download
-            saveAs(combinedData, 'processed_midi.txt'); // You can change the file name here if needed
-        }
-    </script>
 </body>
 </html>
