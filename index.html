@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MIDI to Text Converter (Black MIDI Support)</title>
+    <title>MIDI to Text Converter (No Instruments, No Piano Roll)</title>
     <style>
         #noteDisplay {
             white-space: pre-wrap;
@@ -11,11 +11,6 @@
             padding: 10px;
             height: 200px;
             overflow-y: scroll;
-        }
-        canvas {
-            border: 1px solid #000;
-            width: 100%;
-            height: 300px;
         }
     </style>
 </head>
@@ -34,15 +29,12 @@
 <button onclick="playMidi()">Play MIDI</button>
 <br><br>
 <div id="noteDisplay"></div>
-<canvas id="pianoRoll"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/tone@14"></script>
 <script>
 let midi;
 let synth;
-let ctx = document.getElementById('pianoRoll').getContext('2d');
-let maxTime = 0;
 let worker;
 
 function convertMidi() {
@@ -73,7 +65,6 @@ function convertMidi() {
 
         noteDisplay.innerHTML = '';
         trackSelection.innerHTML = '';
-        maxTime = 0;
 
         midi.tracks.forEach((track, index) => {
             const trackOption = document.createElement('input');
@@ -103,23 +94,31 @@ function startWorker() {
             const midiData = event.data.midi;
             const selectedTracks = event.data.selectedTracks;
 
-            let textContent = '';
-            let totalNotes = 0;
-            let processedNotes = 0;
+            let allNotes = [];
 
+            // Collect all notes from all tracks
             midiData.tracks.forEach((track, index) => {
                 if (!selectedTracks.includes(index)) return;
 
                 track.notes.forEach(note => {
-                    const pitch = note.midi;
-                    const length = note.duration.toFixed(3);
-                    const time = note.time.toFixed(3);
-                    textContent += \`\${pitch}:\${length}:\${time}\n\`;
-                    totalNotes++;
+                    allNotes.push({
+                        pitch: note.midi,
+                        length: note.duration.toFixed(3),
+                        time: note.time.toFixed(3)
+                    });
                 });
             });
 
-            self.postMessage({ textContent, totalNotes });
+            // Sort all notes by their start time
+            allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
+
+            // Build the text output without instrument data
+            let textContent = '';
+            allNotes.forEach(note => {
+                textContent += \`\${note.pitch}:\${note.length}:\${note.time}\n\`;
+            });
+
+            self.postMessage({ textContent });
         };
     `], { type: 'application/javascript' })));
 
@@ -129,11 +128,10 @@ function startWorker() {
     worker.postMessage({ midi: midi.toJSON(), selectedTracks });
 
     worker.onmessage = function(event) {
-        const { textContent, totalNotes } = event.data;
+        const { textContent } = event.data;
         downloadTextFile(textContent);
         progressBar.value = 100;
         progressBar.style.display = 'none';
-        updatePianoRoll();
     };
 }
 
@@ -143,32 +141,10 @@ function downloadTextFile(content) {
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'midi_notes.txt';
+    a.download = 'midi_notes_sorted.txt';
     a.click();
 
     URL.revokeObjectURL(url);
-}
-
-function updatePianoRoll() {
-    if (!midi) return;
-
-    const canvasHeight = 300;
-    const canvasWidth = ctx.canvas.width;
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-    midi.tracks.forEach((track, index) => {
-        if (!document.getElementById(`track${index}`).checked) return;
-
-        track.notes.forEach(note => {
-            const startX = (note.time / maxTime) * canvasWidth;
-            const noteHeight = 10; // Height of each note on the roll
-            const noteY = (128 - note.midi) * (canvasHeight / 128);
-            const noteWidth = (note.duration / maxTime) * canvasWidth;
-
-            ctx.fillStyle = 'rgba(0, 150, 255, 0.7)';
-            ctx.fillRect(startX, noteY, noteWidth, noteHeight);
-        });
-    });
 }
 
 function playMidi() {
