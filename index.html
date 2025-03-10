@@ -54,10 +54,15 @@ function convertMidi() {
             const midiData = event.data;
             let allNotes = [];
 
-            midiData.tracks.forEach(track => {
+            midiData.tracks.forEach((track, trackIndex) => {
                 track.notes.forEach(note => {
-                    // Check if channel exists or can be inferred
-                    const channel = note.channel !== undefined ? note.channel + 1 : 'Unknown';
+                    // Find the channel from the events
+                    let channel = 'Unknown';
+                    track.notes.forEach(event => {
+                        if (event.time === note.time) {
+                            channel = event.channel !== undefined ? event.channel + 1 : 'Unknown';
+                        }
+                    });
 
                     allNotes.push({
                         pitch: note.midi,
