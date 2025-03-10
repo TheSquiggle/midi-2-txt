@@ -1,15 +1,30 @@
-onmessage = function(e) {
-    const { chunkId, chunkData } = e.data;
-    
-    // Process the chunkData (your binary conversion & compression logic here)
-    const processedNotes = processNotesInWorker(chunkData); // This should be the function that processes the notes
+// Function to process MIDI file in chunks
+function processMidiFile(file) {
+    const chunkSize = 100000; // Size of chunks to send to workers
+    const fileReader = new FileReader();
+    let chunkId = 0;
 
-    // Return the processed notes back to the main thread
-    postMessage({ chunkId, processedNotes });
-};
+    // Calculate total chunks
+    totalChunks = Math.ceil(file.size / chunkSize);
 
-// Function to process notes in binary format (example logic)
-function processNotesInWorker(chunkData) {
-    // Simulate some processing (you'll replace this with actual binary note conversion logic)
-    return chunkData; // Just returning the data for now
+    // Recursive function to read and process the file in chunks
+    function readNextChunk(start) {
+        if (start >= file.size) return; // Stop if all chunks have been processed
+
+        // Read the next chunk from the file
+        fileReader.onload = function(event) {
+            const chunkData = event.target.result;
+            workers[chunkId % workerCount].postMessage({ chunkId, chunkData });
+            chunkId++;
+
+            // Call the function again for the next chunk
+            readNextChunk(start + chunkSize);
+        };
+
+        // Slice the file to read the next chunk
+        fileReader.readAsArrayBuffer(file.slice(start, start + chunkSize));
+    }
+
+    // Start the reading process from the first chunk
+    readNextChunk(0);
 }
