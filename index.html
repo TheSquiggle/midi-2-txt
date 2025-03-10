@@ -110,21 +110,16 @@ function startWorker() {
             midiData.tracks.forEach((track, index) => {
                 if (!selectedTracks.includes(index)) return;
 
-                // Get the instrument (program change) for the track as a number
-                const instrument = track.program !== undefined ? track.program : '0';  // '0' is a default program number
-
                 track.notes.forEach(note => {
                     const pitch = note.midi;
                     const length = note.duration.toFixed(3);
                     const time = note.time.toFixed(3);
-
-                    // Add instrument number to the data (as the fourth space)
-                    textContent += \`\${pitch}:\${length}:\${time}:\${instrument}\n\`;
-                    processedNotes++;
+                    textContent += \`\${pitch}:\${length}:\${time}\n\`;
+                    totalNotes++;
                 });
             });
 
-            self.postMessage({ textContent, processedNotes });
+            self.postMessage({ textContent, totalNotes });
         };
     `], { type: 'application/javascript' })));
 
@@ -134,10 +129,11 @@ function startWorker() {
     worker.postMessage({ midi: midi.toJSON(), selectedTracks });
 
     worker.onmessage = function(event) {
-        const { textContent, processedNotes } = event.data;
+        const { textContent, totalNotes } = event.data;
         downloadTextFile(textContent);
         progressBar.value = 100;
         progressBar.style.display = 'none';
+        updatePianoRoll();
     };
 }
 
@@ -151,6 +147,28 @@ function downloadTextFile(content) {
     a.click();
 
     URL.revokeObjectURL(url);
+}
+
+function updatePianoRoll() {
+    if (!midi) return;
+
+    const canvasHeight = 300;
+    const canvasWidth = ctx.canvas.width;
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    midi.tracks.forEach((track, index) => {
+        if (!document.getElementById(`track${index}`).checked) return;
+
+        track.notes.forEach(note => {
+            const startX = (note.time / maxTime) * canvasWidth;
+            const noteHeight = 10; // Height of each note on the roll
+            const noteY = (128 - note.midi) * (canvasHeight / 128);
+            const noteWidth = (note.duration / maxTime) * canvasWidth;
+
+            ctx.fillStyle = 'rgba(0, 150, 255, 0.7)';
+            ctx.fillRect(startX, noteY, noteWidth, noteHeight);
+        });
+    });
 }
 
 function playMidi() {
