@@ -59,7 +59,8 @@ function convertMidi() {
                     allNotes.push({
                         pitch: note.midi,
                         length: note.duration.toFixed(3),
-                        time: note.time.toFixed(3)
+                        time: note.time.toFixed(3),
+                        channel: note.channel + 1 // Channel (1-based)
                     });
                 });
             });
@@ -68,7 +69,7 @@ function convertMidi() {
 
             let textContent = '';
             allNotes.forEach(note => {
-                textContent += note.pitch + ':' + note.length + ':' + note.time + '\\n';
+                textContent += note.pitch + ':' + note.length + ':' + note.time + ':' + note.channel + '\\n';
             });
 
             self.postMessage(textContent);
