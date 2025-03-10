@@ -1,87 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Black MIDI Monster Converter</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        input[type="file"] {
-            margin-bottom: 20px;
-        }
-        #status {
-            margin-top: 20px;
-        }
-    </style>
-</head>
-<body>
-    <h1>Black MIDI Monster Converter</h1>
-    <p>Select a MIDI file to process (up to billions of notes supported):</p>
-    <input type="file" id="midiFileInput" />
-    <div id="status"></div>
+onmessage = function(e) {
+    const { chunkId, chunkData } = e.data;
     
-    <script>
-        // Worker-related setup
-        const workerCount = navigator.hardwareConcurrency || 4; // Use available CPU cores or 4 workers by default
-        let workers = [];
+    // Process the chunkData (your binary conversion & compression logic here)
+    const processedNotes = processNotesInWorker(chunkData); // This should be the function that processes the notes
 
-        // Helper function to create workers
-        function createWorker(chunkId) {
-            const worker = new Worker('worker.js'); // Assuming worker.js handles MIDI chunk processing
-            worker.postMessage({chunkId, midiData: null});
-            return worker;
-        }
+    // Return the processed notes back to the main thread
+    postMessage({ chunkId, processedNotes });
+};
 
-        // Initialize workers
-        for (let i = 0; i < workerCount; i++) {
-            workers.push(createWorker(i));
-        }
-
-        // Function to process MIDI file in chunks
-        function processMidiFile(file) {
-            const chunkSize = 100000; // Size of chunks to send to workers
-            const fileReader = new FileReader();
-            let chunkId = 0;
-
-            // Stream the file in chunks
-            fileReader.onload = function(event) {
-                const chunkData = event.target.result;
-                workers[chunkId % workerCount].postMessage({ chunkId, chunkData });
-                chunkId++;
-            };
-
-            // Read chunks from the file
-            let start = 0;
-            fileReader.readAsArrayBuffer(file.slice(start, start + chunkSize));
-        }
-
-        // Function to append processed notes to the output
-        function appendToFile(processedNotes) {
-            // Here, append to the final file. For demo, it just shows status.
-            document.getElementById("status").innerText = "Processing chunk... (This would append data to the final file)";
-        }
-
-        // Handle worker messages (processed notes)
-        workers.forEach(worker => {
-            worker.onmessage = function(event) {
-                const { chunkId, processedNotes } = event.data;
-                appendToFile(processedNotes); // This would handle the processed notes
-            };
-        });
-
-        // When the user selects a file
-        document.getElementById('midiFileInput').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                document.getElementById("status").innerText = "Processing your MIDI file...";
-                processMidiFile(file); // Start the MIDI file processing
-            } else {
-                document.getElementById("status").innerText = "Please select a MIDI file!";
-            }
-        });
-    </script>
-</body>
-</html>
+// Function to process notes in binary format (example logic)
+function processNotesInWorker(chunkData) {
+    // Simulate some processing (you'll replace this with actual binary note conversion logic)
+    return chunkData; // Just returning the data for now
+}
