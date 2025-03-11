@@ -48,7 +48,17 @@ function convertMidi() {
             return;
         }
 
-        console.log('MIDI data loaded:', midi);
+        // Log the entire MIDI object to understand its structure
+        console.log('MIDI object:', midi);
+        console.log('Tracks:', midi.tracks);
+        console.log('Track 1 notes:', midi.tracks[0].notes);
+
+        // Just to check if there are any notes in the first track
+        if (midi.tracks.length > 0 && midi.tracks[0].notes.length > 0) {
+            console.log('Notes in the first track:', midi.tracks[0].notes);
+        } else {
+            console.log('No notes found in the first track.');
+        }
 
         if (worker) worker.terminate();
         const workerCode = `
@@ -56,37 +66,19 @@ function convertMidi() {
             const midiData = event.data;
             let allNotes = [];
 
-            console.log('Processing tracks...');
+            // Check if the track has notes
             midiData.tracks.forEach((track, trackIndex) => {
                 console.log('Processing track', trackIndex, 'with', track.notes.length, 'notes.');
 
-                // Log the track's events and notes
-                console.log('Track events:', track.events);
-                console.log('Track notes:', track.notes);
-
-                // Check if events exist in the track
-                if (track.events && Array.isArray(track.events)) {
-                    track.notes.forEach(note => {
-                        let channel = 'Unknown'; // Default to Unknown
-
-                        // Loop through track events to find the channel of each note
-                        track.events.forEach(event => {
-                            if (event.type === 'noteOn' && event.time === note.time) {
-                                console.log('Found noteOn event at time', event.time, 'with channel', event.channel);
-                                channel = event.channel + 1; // Channel is 1-based in most tools
-                            }
-                        });
-
-                        allNotes.push({
-                            pitch: note.midi,
-                            length: note.duration.toFixed(3),
-                            time: note.time.toFixed(3),
-                            channel: channel // Channel (1-based)
-                        });
+                // Directly access notes (without trying to check events for now)
+                track.notes.forEach(note => {
+                    allNotes.push({
+                        pitch: note.midi,
+                        length: note.duration.toFixed(3),
+                        time: note.time.toFixed(3),
+                        channel: 'Unknown' // Placeholder for channel (for now)
                     });
-                } else {
-                    console.warn('No events found for track', trackIndex);
-                }
+                });
             });
 
             console.log('Final notes:', allNotes);
