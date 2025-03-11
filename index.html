@@ -48,60 +48,55 @@ function convertMidi() {
             return;
         }
 
-        // Log the entire MIDI object and its tracks for inspection
-        console.log('MIDI object:', midi);
-        console.log('Tracks:', midi.tracks);
-
-        if (midi.tracks.length > 0) {
+        if (worker) worker.terminate();
+        const workerCode = `
+        self.onmessage = function(event) {
+            const midiData = event.data;
             let allNotes = [];
 
-            // Check and log events for each track
-            midi.tracks.forEach((track, trackIndex) => {
-                console.log(`Track ${trackIndex} events:`, track.events);
-                
-                // Check if the track has events
-                if (track.events && track.events.length > 0) {
-                    track.events.forEach(event => {
-                        // Only process noteOn and noteOff events
-                        if (event.type === 'noteOn' || event.type === 'noteOff') {
-                            allNotes.push({
-                                pitch: event.noteNumber,  // MIDI note number (pitch)
-                                length: event.duration ? event.duration.toFixed(3) : 'N/A',  // Event duration
-                                time: event.time.toFixed(3),  // Event time
-                                channel: event.channel || 'Unknown'  // Event channel
-                            });
-                        }
+            midiData.tracks.forEach(track => {
+                track.notes.forEach(note => {
+                    allNotes.push({
+                        pitch: note.midi,
+                        length: note.duration.toFixed(3),
+                        time: note.time.toFixed(3)
                     });
-                } else {
-                    console.log(`No events found in Track ${trackIndex}.`);
-                }
+                });
             });
-
-            console.log('Final notes with channels:', allNotes);
 
             allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
 
             let textContent = '';
             allNotes.forEach(note => {
-                textContent += note.pitch + ':' + note.length + ':' + note.time + ':' + note.channel + '\n';
+                textContent += note.pitch + ':' + note.length + ':' + note.time + '\\n';
             });
 
-            // Send back the results
-            const blob = new Blob([textContent], { type: 'text/plain' });
+            self.postMessage(textContent);
+        };`;
+
+        worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
+
+        worker.postMessage(midi.toJSON());
+
+        worker.onmessage = function(event) {
+            const blob = new Blob([event.data], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
+
             const a = document.createElement('a');
             a.href = url;
             a.download = 'midi_notes.txt';
             a.click();
-            URL.revokeObjectURL(url);
 
+            URL.revokeObjectURL(url);
             progressBar.value = 100;
             progressBar.style.display = 'none';
             statusMessage.textContent = 'Conversion complete. Downloading the file...';
-        } else {
-            alert('No tracks found in the MIDI file.');
+        };
+
+        worker.onerror = function() {
+            statusMessage.textContent = 'An error occurred during the conversion.';
             progressBar.style.display = 'none';
-        }
+        };
     };
 
     reader.readAsArrayBuffer(file);
