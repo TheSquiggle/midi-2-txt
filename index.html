@@ -14,7 +14,6 @@
 <progress id="progressBar" value="0" max="100" style="width:100%; display:none;"></progress>
 <br><br>
 <div id="noteDisplay"></div>
-<div id="statusMessage" style="margin-top: 10px;"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2"></script>
 <script>
@@ -24,7 +23,6 @@ let worker;
 function convertMidi() {
     const fileInput = document.getElementById('fileInput');
     const progressBar = document.getElementById('progressBar');
-    const statusMessage = document.getElementById('statusMessage');
 
     if (fileInput.files.length === 0) {
         alert('Please upload a MIDI file.');
@@ -33,7 +31,6 @@ function convertMidi() {
 
     progressBar.style.display = 'block';
     progressBar.value = 0;
-    statusMessage.textContent = 'Loading MIDI file...';
 
     const file = fileInput.files[0];
     const reader = new FileReader();
@@ -44,35 +41,37 @@ function convertMidi() {
         } catch (error) {
             alert('Failed to read MIDI file. Please check the file format.');
             progressBar.style.display = 'none';
-            statusMessage.textContent = '';
             return;
         }
 
         if (worker) worker.terminate();
-        const workerCode = `
-        self.onmessage = function(event) {
-            const midiData = event.data;
-            let allNotes = [];
 
-            midiData.tracks.forEach(track => {
-                track.notes.forEach(note => {
-                    allNotes.push({
-                        pitch: note.midi,
-                        length: note.duration.toFixed(3),
-                        time: note.time.toFixed(3)
-                    });
-                });
-            });
-
-            allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
-
-            let textContent = '';
-            allNotes.forEach(note => {
-                textContent += note.pitch + ':' + note.length + ':' + note.time + '\\n';
-            });
-
-            self.postMessage(textContent);
-        };`;
+        const workerCode = [
+            'self.onmessage = function(event) {',
+            '    const midiData = event.data;',
+            '    let allNotes = [];',
+            '',
+            '    midiData.tracks.forEach(track => {',
+            '        track.notes.forEach(note => {',
+            '            allNotes.push({',
+            '                pitch: note.midi,',
+            '                length: note.duration.toFixed(3),',
+            '                time: note.time.toFixed(3),',
+            '                channel: track.channel',
+            '            });',
+            '        });',
+            '    });',
+            '',
+            '    allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));',
+            '',
+            '    let textContent = \"\";',
+            '    allNotes.forEach(note => {',
+            '        textContent += note.pitch + ":" + note.length + ":" + note.time + ":" + note.channel + "\\n";',
+            '    });',
+            '',
+            '    self.postMessage(textContent);',
+            '};'
+        ].join('\n');
 
         worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
@@ -89,12 +88,6 @@ function convertMidi() {
 
             URL.revokeObjectURL(url);
             progressBar.value = 100;
-            progressBar.style.display = 'none';
-            statusMessage.textContent = 'Conversion complete. Downloading the file...';
-        };
-
-        worker.onerror = function() {
-            statusMessage.textContent = 'An error occurred during the conversion.';
             progressBar.style.display = 'none';
         };
     };
