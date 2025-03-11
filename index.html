@@ -48,7 +48,7 @@ function convertMidi() {
             return;
         }
 
-        // Log the entire MIDI object to understand its structure
+        // Log the entire MIDI object and its first track for inspection
         console.log('MIDI object:', midi);
         console.log('Tracks:', midi.tracks);
         console.log('Track 1 notes:', midi.tracks[0].notes);
@@ -66,19 +66,20 @@ function convertMidi() {
             const midiData = event.data;
             let allNotes = [];
 
-            // Check if the track has notes
+            // Access notes directly without checking events for now
             midiData.tracks.forEach((track, trackIndex) => {
                 console.log('Processing track', trackIndex, 'with', track.notes.length, 'notes.');
 
-                // Directly access notes (without trying to check events for now)
-                track.notes.forEach(note => {
-                    allNotes.push({
-                        pitch: note.midi,
-                        length: note.duration.toFixed(3),
-                        time: note.time.toFixed(3),
-                        channel: 'Unknown' // Placeholder for channel (for now)
+                // Check if there are notes in the track
+                if (track.notes.length > 0) {
+                    track.notes.forEach(note => {
+                        allNotes.push({
+                            pitch: note.midi,
+                            length: note.duration.toFixed(3),
+                            time: note.time.toFixed(3)
+                        });
                     });
-                });
+                }
             });
 
             console.log('Final notes:', allNotes);
@@ -87,7 +88,7 @@ function convertMidi() {
 
             let textContent = '';
             allNotes.forEach(note => {
-                textContent += note.pitch + ':' + note.length + ':' + note.time + ':' + note.channel + '\\n';
+                textContent += note.pitch + ':' + note.length + ':' + note.time + '\\n';
             });
 
             self.postMessage(textContent);
