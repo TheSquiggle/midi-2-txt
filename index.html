@@ -48,30 +48,33 @@ function convertMidi() {
             return;
         }
 
-        // Log the entire MIDI object and its first track for inspection
+        // Log the entire MIDI object and its tracks for inspection
         console.log('MIDI object:', midi);
         console.log('Tracks:', midi.tracks);
-        console.log('Track 1 events:', midi.tracks[0].events);
 
-        // Access notes and try to find channel information from events
         if (midi.tracks.length > 0) {
             let allNotes = [];
 
-            // Check events for channel information
+            // Check and log events for each track
             midi.tracks.forEach((track, trackIndex) => {
-                console.log('Processing track', trackIndex, 'with', track.events.length, 'events.');
-
-                track.events.forEach(event => {
-                    // Check if the event is a note on or off event
-                    if (event.type === 'noteOn' || event.type === 'noteOff') {
-                        allNotes.push({
-                            pitch: event.noteNumber,  // MIDI note number (pitch)
-                            length: event.duration ? event.duration.toFixed(3) : 'N/A',  // Event duration
-                            time: event.time.toFixed(3),  // Event time
-                            channel: event.channel  // Event channel
-                        });
-                    }
-                });
+                console.log(`Track ${trackIndex} events:`, track.events);
+                
+                // Check if the track has events
+                if (track.events && track.events.length > 0) {
+                    track.events.forEach(event => {
+                        // Only process noteOn and noteOff events
+                        if (event.type === 'noteOn' || event.type === 'noteOff') {
+                            allNotes.push({
+                                pitch: event.noteNumber,  // MIDI note number (pitch)
+                                length: event.duration ? event.duration.toFixed(3) : 'N/A',  // Event duration
+                                time: event.time.toFixed(3),  // Event time
+                                channel: event.channel || 'Unknown'  // Event channel
+                            });
+                        }
+                    });
+                } else {
+                    console.log(`No events found in Track ${trackIndex}.`);
+                }
             });
 
             console.log('Final notes with channels:', allNotes);
@@ -84,7 +87,20 @@ function convertMidi() {
             });
 
             // Send back the results
-            self.postMessage(textContent);
+            const blob = new Blob([textContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'midi_notes.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+
+            progressBar.value = 100;
+            progressBar.style.display = 'none';
+            statusMessage.textContent = 'Conversion complete. Downloading the file...';
+        } else {
+            alert('No tracks found in the MIDI file.');
+            progressBar.style.display = 'none';
         }
     };
 
