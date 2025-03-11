@@ -51,73 +51,41 @@ function convertMidi() {
         // Log the entire MIDI object and its first track for inspection
         console.log('MIDI object:', midi);
         console.log('Tracks:', midi.tracks);
-        console.log('Track 1 notes:', midi.tracks[0].notes);
+        console.log('Track 1 events:', midi.tracks[0].events);
 
-        // Just to check if there are any notes in the first track
-        if (midi.tracks.length > 0 && midi.tracks[0].notes.length > 0) {
-            console.log('Notes in the first track:', midi.tracks[0].notes);
-        } else {
-            console.log('No notes found in the first track.');
-        }
-
-        if (worker) worker.terminate();
-        const workerCode = `
-        self.onmessage = function(event) {
-            const midiData = event.data;
+        // Access notes and try to find channel information from events
+        if (midi.tracks.length > 0) {
             let allNotes = [];
 
-            // Access notes directly without checking events for now
-            midiData.tracks.forEach((track, trackIndex) => {
-                console.log('Processing track', trackIndex, 'with', track.notes.length, 'notes.');
+            // Check events for channel information
+            midi.tracks.forEach((track, trackIndex) => {
+                console.log('Processing track', trackIndex, 'with', track.events.length, 'events.');
 
-                // Check if there are notes in the track
-                if (track.notes.length > 0) {
-                    track.notes.forEach(note => {
+                track.events.forEach(event => {
+                    // Check if the event is a note on or off event
+                    if (event.type === 'noteOn' || event.type === 'noteOff') {
                         allNotes.push({
-                            pitch: note.midi,
-                            length: note.duration.toFixed(3),
-                            time: note.time.toFixed(3)
+                            pitch: event.noteNumber,  // MIDI note number (pitch)
+                            length: event.duration ? event.duration.toFixed(3) : 'N/A',  // Event duration
+                            time: event.time.toFixed(3),  // Event time
+                            channel: event.channel  // Event channel
                         });
-                    });
-                }
+                    }
+                });
             });
 
-            console.log('Final notes:', allNotes);
+            console.log('Final notes with channels:', allNotes);
 
             allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
 
             let textContent = '';
             allNotes.forEach(note => {
-                textContent += note.pitch + ':' + note.length + ':' + note.time + '\\n';
+                textContent += note.pitch + ':' + note.length + ':' + note.time + ':' + note.channel + '\n';
             });
 
+            // Send back the results
             self.postMessage(textContent);
-        };`;
-
-        worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
-
-        worker.postMessage(midi.toJSON());
-
-        worker.onmessage = function(event) {
-            const blob = new Blob([event.data], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'midi_notes.txt';
-            a.click();
-
-            URL.revokeObjectURL(url);
-            progressBar.value = 100;
-            progressBar.style.display = 'none';
-            statusMessage.textContent = 'Conversion complete. Downloading the file...';
-        };
-
-        worker.onerror = function(e) {
-            console.error('Worker error:', e.message);
-            statusMessage.textContent = 'An error occurred during the conversion.';
-            progressBar.style.display = 'none';
-        };
+        }
     };
 
     reader.readAsArrayBuffer(file);
