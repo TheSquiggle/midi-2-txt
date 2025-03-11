@@ -48,6 +48,8 @@ function convertMidi() {
             return;
         }
 
+        console.log('MIDI data loaded:', midi);
+
         if (worker) worker.terminate();
         const workerCode = `
         self.onmessage = function(event) {
@@ -57,10 +59,13 @@ function convertMidi() {
             console.log('Processing tracks...');
             midiData.tracks.forEach((track, trackIndex) => {
                 console.log('Processing track', trackIndex, 'with', track.notes.length, 'notes.');
-                
+
+                // Log the track's events and notes
+                console.log('Track events:', track.events);
+                console.log('Track notes:', track.notes);
+
                 // Check if events exist in the track
                 if (track.events && Array.isArray(track.events)) {
-                    console.log('Track events:', track.events);
                     track.notes.forEach(note => {
                         let channel = 'Unknown'; // Default to Unknown
 
@@ -83,6 +88,8 @@ function convertMidi() {
                     console.warn('No events found for track', trackIndex);
                 }
             });
+
+            console.log('Final notes:', allNotes);
 
             allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));
 
