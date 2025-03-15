@@ -38,6 +38,7 @@ function convertMidi() {
     reader.onload = function(event) {
         if (worker) worker.terminate();
 
+        // Worker code as a string, properly escaped
         const workerCode = `
             self.onmessage = function(event) {
                 const midiData = event.data;
@@ -59,12 +60,14 @@ function convertMidi() {
             };
         `;
 
-        // Ensure the worker is created correctly
+        // Create a worker with the code
         worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
+        // Parse the MIDI file using Tone.js
         const midi = new Midi(event.target.result);  // Parse the MIDI file
         worker.postMessage(midi.toJSON());  // Send parsed MIDI data to the worker
 
+        // Handle the worker's result
         worker.onmessage = function(event) {
             const a = document.createElement('a');
             a.href = event.data;
