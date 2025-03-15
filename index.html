@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Black MIDI Monster Converter (Ultra-Optimized)</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
 
@@ -50,7 +51,7 @@ function convertMidi() {
 
                 allNotes.sort((a, b) => parseFloat(a[2]) - parseFloat(b[2]));
                 
-                let textContent = allNotes.map(note => note.join(':')).join('\n');
+                let textContent = allNotes.map(note => note.join(':')).join('\\n');
                 
                 const blob = new Blob([textContent], { type: 'text/plain' });
                 const url = URL.createObjectURL(blob);
@@ -58,8 +59,11 @@ function convertMidi() {
             };
         `;
 
+        // Ensure the worker is created correctly
         worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
-        worker.postMessage(new Midi(event.target.result).toJSON());
+
+        const midi = new Midi(event.target.result);  // Parse the MIDI file
+        worker.postMessage(midi.toJSON());  // Send parsed MIDI data to the worker
 
         worker.onmessage = function(event) {
             const a = document.createElement('a');
