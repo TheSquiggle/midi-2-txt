@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate MIDI to Text Converter (Black MIDI Optimized)</title>
+    <title>Black MIDI Monster Converter (Ultra-Optimized)</title>
 </head>
 <body>
 
@@ -17,7 +17,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@tonejs/midi@2"></script>
 <script>
-let midi;
 let worker;
 
 function convertMidi() {
@@ -36,58 +35,39 @@ function convertMidi() {
     const reader = new FileReader();
 
     reader.onload = function(event) {
-        try {
-            midi = new Midi(event.target.result);
-        } catch (error) {
-            alert('Failed to read MIDI file. Please check the file format.');
-            progressBar.style.display = 'none';
-            return;
-        }
-
         if (worker) worker.terminate();
 
-        const workerCode = [
-            'self.onmessage = function(event) {',
-            '    const midiData = event.data;',
-            '    let allNotes = [];',
-            '',
-            '    midiData.tracks.forEach(track => {',
-            '        track.notes.forEach(note => {',
-            '            allNotes.push({',
-            '                pitch: note.midi,',
-            '                length: note.duration.toFixed(3),',
-            '                time: note.time.toFixed(3),',
-            '                channel: track.channel,',
-            '                velocity: note.velocity.toFixed(3)',
-            '            });',
-            '        });',
-            '    });',
-            '',
-            '    allNotes.sort((a, b) => parseFloat(a.time) - parseFloat(b.time));',
-            '',
-            '    let textContent = \"\";',
-            '    allNotes.forEach(note => {',
-            '        textContent += note.pitch + ":" + note.length + ":" + note.time + ":" + note.channel + ":" + note.velocity + "\\n";',
-            '    });',
-            '',
-            '    self.postMessage(textContent);',
-            '};'
-        ].join('\n');
+        const workerCode = `
+            self.onmessage = function(event) {
+                const midiData = event.data;
+                let allNotes = [];
+                
+                midiData.tracks.forEach(track => {
+                    track.notes.forEach(note => {
+                        allNotes.push([note.midi, note.duration.toFixed(3), note.time.toFixed(3), track.channel, note.velocity.toFixed(3)]);
+                    });
+                });
+
+                allNotes.sort((a, b) => parseFloat(a[2]) - parseFloat(b[2]));
+                
+                let textContent = allNotes.map(note => note.join(':')).join('\n');
+                
+                const blob = new Blob([textContent], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                self.postMessage(url);
+            };
+        `;
 
         worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
-
-        worker.postMessage(midi.toJSON());
+        worker.postMessage(new Midi(event.target.result).toJSON());
 
         worker.onmessage = function(event) {
-            const blob = new Blob([event.data], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-
             const a = document.createElement('a');
-            a.href = url;
+            a.href = event.data;
             a.download = 'midi_notes.txt';
             a.click();
 
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(event.data);
             progressBar.value = 100;
             progressBar.style.display = 'none';
         };
